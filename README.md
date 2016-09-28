@@ -8,6 +8,10 @@ This is `nkf` package for OpenWrt, tested on CC(15.05.1).
 $ opkg update
 $ opkg install openssl-util
 $ echo 'src/gz hnw https://dl.bintray.com/hnw/openwrt-packages/15.05.1/ar71xx' >> /etc/opkg/customfeeds.conf
+$ cat > /tmp/public.key
+untrusted comment: public key ad619e57963caac
+RWQK1hnleWPKrKzKxpRlpYZVtkWvCVmw7HbukOaGFqeJg8o01UTv7RML
+$ opkg-key add /tmp/public.key
 $ opkg update
 $ opkg install nkf
 ```
