@@ -1,96 +1,92 @@
 sudo: required
 language: c
 services: docker
-cache: ccache
 
 env:
   global:
     - DOCKERHUB_IMG=yhnw/openwrt-sdk
-    - BINTRAY_USER=hnw
-    - BINTRAY_REPO=openwrt-packages
+    - PKG_REPOS_URL=https://github.com/hnw/openwrt-packages.git
     - PKG_NAME=nkf
-    - QUIET=1 # 1: suppress build log / "": output all
-    - secure: "jHTDCYco1/3qLxaiTUHGPs0wTIxCS+SFD/O9itJYR0sKzkv/QfyzeHkTpQGooXPfVlckKPPCYVISSFfK062EdhUzTcgnZ7A+feBrK+aaLWbzZscYXK+SzOBJVhRTC6U/A8uEiekyZky4Dx0sM2sxQaazLVffNlEJbN+/OAgBjIAnTNNlHUeeltXkRW6XcSgIO6hF0zhxYLJ0U38tdVDw8pY97LHMhdtH1+4n/NeEIi3/a/I5m2YZNzleAFNU0GcD/L52ARJkNznmFO8CG1H3Az2SYUKfsRcNDpKzZH9YIuA4xHJwWEwf/mahO0coUvi08MXMjvQswPbWH6vcAusO1NKjXjsw1aaxR1NCRZUX3mJveP/0Gv7u9KEF3R2YqwgaBy/rkwO2xJ3BHbp8JDccGCe1jZccvpBPEuOdAcSNfCPcpV5bD9FuvCzFP5gMzIH9RXQzKxXt57roZVeEc8PCcavWYSq6aRAgulNLAmUMaxFX990a5mDQ1V1ViCNMSULPCUKmLHfLuzuPcnMysY4H8v6rrlrdBL+X6e7N3KW5leS+2aIR0I4lvbKO+1hMpFwiX1tyHGSFks3FIS7wWU1CTnKaqqOSXLFlgcnztJT5QMx7b/nKdgf4GX2jSV/+bXcNfexm7a2ef8ne1Re68a0dCXbaCGXcJt1mCR4VJowgTzg="
+    - OPENWRT_GID=1000
+    - GCS_ACCESS_KEY_ID=GOOGZU4AGJJUVQ4DLX52
+    - GCS_BUCKET=hnw-gcs-bucket-for-travis
+    - GCS_UPLOAD_DIR="$(basename ${TRAVIS_REPO_SLUG})-${TRAVIS_BUILD_NUMBER}"
+    - secure: "SW2CLUe5AjKDeZg0xifuWR5G6t2SYzkp05Q5OEuJlLVUSE+L9hqaTmGwnsS2VYWNOYxxCjo3Wl/fx5hbfPYCPIg9ITczSTWTBo3TCHZ3IJeVYa4BxN55LTb4y7jY6tO11GfdlMsgDMpIJIK9VD+3xQWVkmYj0vIGt+qYZIBmCuI4bvUwVB6Wn0GSZMa4qKkWYH5MEynWgCHFIjwQ6LWIhoCOcoJ9iE6RM2YdVtNosCbtFeR2+41/67TQ46cAGea2HPJfuwS6hkOpSq+1+1AFhRwOJPyfejZ/SpUYfSCsDraPlMEKHSzXBmVvbnSrEqwpsuBRhhih3Hi833kJWq+Rbq73zdSZafwpOiMlmFCxsvo56LDp6QZYKMqjFgkLmnnx0mudXKSwHwoJNdF3uD2ctV9TH3RFk5igqJyDVxO29gTTZx1QrNVx7tbFXJREYnCH9AKBcDcI05caA447w2hB4Nqqz6yQnr/FdIHdgXPLDIi3Hnmtx4ndlKLISoYgWUZ7yXBA3DZDcBAhL6YPiI1yda1OEjVUawKkkChVfLwtufSU8lMv2YCwnuQGVPTvuoUUKnTMiF4a0HWxQcSGlhRB2D+aFNc8/Y/OuZkRbUcispj53PbFntKdaCjXLh/jCQfhkfhe1KDN0iusclA4vziXEcXegOiJlajAnkE2JHnO4kA="
+    - VERBOSE=1
   matrix:
-    - DISTRO=15.05.1 ARCH=ar71xx PKG_DIR=bin/ar71xx/packages
-    - DISTRO=lede    ARCH=ar71xx PKG_DIR=bin/packages/mips_24kc
-
-before_install:
-  - docker version
-  - ccache -s | tee ccache.log
+    - DOCKERHUB_TAG=15.05.1-ar71xx      BUILD_DIR=bin/ar71xx/packages        OUT_DIR=15.05.1/mips_24kc
+    - DOCKERHUB_TAG=17.01-ar71xx        BUILD_DIR=bin/packages/mips_24kc     OUT_DIR=17.01/mips_24kc
+    - DOCKERHUB_TAG=17.01-ramips-mt7620 BUILD_DIR=bin/packages/mipsel_24kc   OUT_DIR=17.01/mipsel_24kc
+    - DOCKERHUB_TAG=17.01-bcm53xx       BUILD_DIR=bin/packages/arm_cortex-a9 OUT_DIR=17.01/arm_cortex-a9
 
 script:
-  - docker run --rm -u openwrt -v $PWD:/work -v $HOME/.ccache:/home/openwrt/.ccache ${DOCKERHUB_IMG}:${DISTRO}-${ARCH} /bin/bash /work/build.sh ${DISTRO}-${ARCH} $PKG_DIR $PKG_NAME $QUIET
+  - mkdir -p $PWD/pkgs
+  - scripts/chgrp-for-docker.sh -g $OPENWRT_GID $PWD/pkgs
+  - docker run --rm -u openwrt -v $PWD:/work ${DOCKERHUB_IMG}:${DOCKERHUB_TAG} /bin/bash /work/scripts/build.sh $PKG_NAME $BUILD_DIR /work /work/pkgs $OUT_DIR $VERBOSE
   - ls -la
-  - |
-    echo '### before build ###' &&
-    cat ccache.log &&
-    echo &&
-    echo '### after build ###' &&
-    ccache -s
 
 after_failure:
-  - if [[ -e build.log ]]; then tail -300 build.log; fi
+  - if [[ -e pkgs/build.log ]] ; then tail -300 pkgs/build.log ; fi
 
 before_deploy:
   - |
-    if [[ ! -e "descriptor.json" ]]; then
-      if [[ -n "$TRAVIS_TAG" ]]; then
-        export VERSION=stable;
-        export VCS_TAG="$TRAVIS_TAG";
-        export DESC="Stable release";
-        export UPLOAD_DIR_SUFFIX=;
-      else
-        export VERSION=develop;
-        export VCS_TAG=HEAD;
-        export DESC="Development snapshot";
-        export UPLOAD_DIR_SUFFIX=-dev;
-      fi;
-      export RELEASED=$(date +%Y-%m-%d);
-      UPLOAD_EXT=ipk envsubst < descriptor.json.in > descriptor.json;
-      cat descriptor.json;
-      UPLOAD_EXT=sig PKG_NAME=zzz0-metadata-signature envsubst < descriptor.json.in > descriptor-sig.json;
-      cat descriptor-sig.json;
-    fi
-
-after_deploy:
-  - |
-    if [[ ! -e "pkgs-for-bintray/Packages" ]] ; then
-      sleep 4;
-      for file in Packages Packages.gz; do
-        for retry in $(seq 1 10); do
-          if [[ ! -e "pkgs-for-bintray/$file" ]] ; then
-            wget -P pkgs-for-bintray https://dl.bintray.com/${BINTRAY_USER}/${BINTRAY_REPO}/${DISTRO}/${ARCH}${UPLOAD_DIR_SUFFIX}/$file && break;
-          fi
-          sleep 2
-        done
-      done
-    fi
-  - |
-    if [[ -e "pkgs-for-bintray/Packages" && ! -e "pkgs-for-bintray/Packages.sig" ]] ; then
-      docker run --rm -u openwrt -v $PWD:/work ${DOCKERHUB_IMG}:${DISTRO}-${ARCH} /bin/bash /work/sign.sh $USIGN_SECRET_KEY;
+    if [[ -n ${TRAVIS_TAG} || -n ${TRAVIS_BRANCH} && ${TRAVIS_BRANCH} == "master" ]] ; then
+        scripts/extract-encrypted-tar.sh -K $encrypted_1176d606f0a3_key -iv $encrypted_1176d606f0a3_iv secrets.tar.enc
+        if [[ -e $HOME/.ssh ]] ; then
+            mv $HOME/.ssh $HOME/.ssh.orig
+        fi
+        if [[ -n ${TRAVIS_TAG} ]] ; then
+            echo "This build is triggered by tag: preparing deploy-key for pushing binary packages"
+            mv .ssh_for_push_pkgs $HOME/.ssh
+        else
+            echo "We are on master branch: preparing deploy-key for pushing release tag"
+            mv .ssh_for_push_tag $HOME/.ssh
+        fi
     fi
 
 deploy:
-  - provider: bintray
-    file: "descriptor.json"
-    user: hnw
-    key:
-      secure: "RDceY014Yca9YFjs6b2sCRWSeTLFypdi7pC4KroYKgYySMPw5P44hU/TYJjvAGjKh5lOaSM2tSjShP2KsYJ7WvA66k0kLxMKyhZddEe6YIfcaAop9SkubMaq65c7bR7qm50T4ANpaQhqw4CwtazZ2xY6YXd43O68MxeZC96pgfqNfrdvhna8O1OO4EiNna80GHbdFo7Wt47Qh/rJL8m71qGHX3uFY9KiOP2jVg4wiH4tq9noKpLyA4H/4K3nvFblJ3MiNMW6LxjXNlalwOx+1AoUv6naZo0VrsV75kcfYaCsjxY4chsmUcYukKtvIx9xKQoyUMI+Ggk4djqjfTQz25cxkATecxgYzvGL4DdY/3Yh48TNaPe+a/IE6OJwrAhHfOrBjdUHVDuZxM4wiUNoZlG1qmov6cwJ1lUmUtV9BrG7jNHLGLoOBRz8pBzymbJMnZt1LOB60XfWjPujGbqtNnEzXmdeTFv7c8xuQgajWRqK35OHcqfZpul7vgz0LJ6P8Y7FC8BUoSJkMkL1irV5UBg95EJ+gMzu1LjDbUjBOwxVX7yh+0XGK9XzBTJCKuJeETljlGaudR1gVZKD//C3FhC2iQzh6TFFt4H1X0ayKpczItiBywf0Ib+AFew6sufGyB70JGWRYzsBGKqt3bzKXpSYni6F/wAySLu+2VxBtpI="
-    on:
-      all_branches: true
-  - provider: bintray
-    file: "descriptor-sig.json"
-    user: hnw
-    key:
-      secure: "RDceY014Yca9YFjs6b2sCRWSeTLFypdi7pC4KroYKgYySMPw5P44hU/TYJjvAGjKh5lOaSM2tSjShP2KsYJ7WvA66k0kLxMKyhZddEe6YIfcaAop9SkubMaq65c7bR7qm50T4ANpaQhqw4CwtazZ2xY6YXd43O68MxeZC96pgfqNfrdvhna8O1OO4EiNna80GHbdFo7Wt47Qh/rJL8m71qGHX3uFY9KiOP2jVg4wiH4tq9noKpLyA4H/4K3nvFblJ3MiNMW6LxjXNlalwOx+1AoUv6naZo0VrsV75kcfYaCsjxY4chsmUcYukKtvIx9xKQoyUMI+Ggk4djqjfTQz25cxkATecxgYzvGL4DdY/3Yh48TNaPe+a/IE6OJwrAhHfOrBjdUHVDuZxM4wiUNoZlG1qmov6cwJ1lUmUtV9BrG7jNHLGLoOBRz8pBzymbJMnZt1LOB60XfWjPujGbqtNnEzXmdeTFv7c8xuQgajWRqK35OHcqfZpul7vgz0LJ6P8Y7FC8BUoSJkMkL1irV5UBg95EJ+gMzu1LjDbUjBOwxVX7yh+0XGK9XzBTJCKuJeETljlGaudR1gVZKD//C3FhC2iQzh6TFFt4H1X0ayKpczItiBywf0Ib+AFew6sufGyB70JGWRYzsBGKqt3bzKXpSYni6F/wAySLu+2VxBtpI="
-    on:
-      all_branches: true
   - provider: releases
     api_key:
-      secure: "ra7XqHwJlRIaw+nR+KIkzgC9WLQ5GYfZQM/OAyuFElSLc6NEP02t9D3d7iPQ0ZlamznSE/4pPkSnJJI4mdP+oDNn/jWRKxaMmbChgO8zoZn6aHRwLcU5YWAxHV2hlwp6zBd5D0ianbchILsTMWxnAhyc8McaN7eOLqjkwEDRmdYjKC4U+tbtlz8S6M6701DYXO2B7pt/2etINDtzIAkgjUPuvUO4ZgObDBuZ0Qs7MoMHabHMJSONGulrAVsvxgvZ0r4Dp5zsk3nsbYISkB+epUHodtrr5EIqpsgCyc3WXHTATNkJix3OR22T94INCLSSvQZbjdy/C6rgFzOxqn5BG12nbThKtFQ6rV4DqvvkqF3+mYqYHhzTuOgWJg+reJNeLful4aRPrYGuJwFpb/DrP6KW4CIKX/jLwVuGXvLUnoMFqJAr6I9eugkK0OmbjJGUwW/2vgf1BnCE/2TsBi0aNkoZymyvd5dXLD/BhtkGh5axIzVpn/P/cF4tbX+b5kD+HbmotHR/+ztpMZJ+bxlhMMSwGJDNi6i3he1Caryl6XgFRK6bl2ikH7eP+fSHXMzIv9FfThziTbsDOaPvhQQFAmm0flpV3WDzHh8X7se5+aGlnme1QKWvAKLunbyyt25Z47d+YWX0OXVhSrLGbG4zJQNch7CFybbXO8LcEBB6WME="
+      secure: "DA5hzrVsrpOF6ezFGC1TV0BG1ok+iyMBSmj6dBKqBYLcWvk+reH+BQimizkf358gND28wQ3KaQuefi7W1dTvr1/so/UkcudWJJzZBetUuswojyeMaS+yJsfIZyHRYRgwjHgCXMHSlvDeZSTe0PNk5rJKWzHpaVnqx1JXcx9llSi4AfnYfcugpeK97h4drhNXnzS+087T7pQ+oMn3AzZG2fafVSIn6rkVecA11fn4CNDlT97GvI++JW8LdbMrSkzpcOfPHeJu2gm6HewHLC+x5pIliyWfmX5hMS7PdVhkpPRASjNfmPVS40J5SGnF2TXz4JRNX7U5qBXu0ROQWJ8Xo1ofHXYQ0HrtSVPV6CtfXzdMc5A9F0Tpco8VBw3cg4Wt6TqZxF8W2GicguI0olagaD4k/CvM1IVEO1/7wg4fdtxCxkLN3qsEhrpZ+NnSpSlZyClHnLIXVWg1eM/KgK0/9CBKrlWvN516OWJs90HO2smms9ixdhxllK+u8+1p7ArToPSdLBO9IAXoswwI2ZHzHqBNCKDOs/IuSOUICHnsvCL8wo8THIcGssyAzR+PONfPwA1jGTC9tt/IhVOffYa7WuXPCizeJ6iIxANgdVzKano/+9rZj1avKQErYx3xKXKaHD9rvB9W0fnl9UQGbUXF65KNd1Ix32m2cqncOwElXYw="
     file_glob: true
-    file: "pkgs-for-github/*.ipk"
+    file: "pkgs/flattened/*.ipk"
     skip_cleanup: true
     on:
       tags: true
+  - provider: gcs
+    access_key_id: ${GCS_ACCESS_KEY_ID}
+    secret_access_key: ${GCS_SECRET_ACCESS_KEY}
+    bucket: ${GCS_BUCKET}
+    skip_cleanup: true
+    local-dir: pkgs/structured/
+    upload-dir: ${GCS_UPLOAD_DIR}
+    all_branches: true
+  - provider: gcs
+    access_key_id: ${GCS_ACCESS_KEY_ID}
+    secret_access_key: ${GCS_SECRET_ACCESS_KEY}
+    bucket: ${GCS_BUCKET}
+    skip_cleanup: true
+    local-dir: pkgs/structured/
+    upload-dir: ${GCS_UPLOAD_DIR}
+    on:
+      tags: true
+
+jobs:
+  include:
+    - if: branch = master
+      stage: Push release tag
+      script: skip
+      deploy:
+        - provider: script
+          script: scripts/push-tag.sh
+    - if: tag IS present
+      stage: Publish binary packages to repos
+      script:
+        - git clone --branch=master ${PKG_REPOS_URL} ../repos
+        - envsubst < .boto.in > $HOME/.boto
+        - gsutil cp -r s3://${GCS_BUCKET}/${GCS_UPLOAD_DIR}/'*' ../repos
+      deploy:
+        - provider: script
+          script: scripts/push-pkgs.sh ../repos
+          on:
+            tags: true
