@@ -22,5 +22,5 @@ $ ./scripts/feeds update -a
 $ ./scripts/feeds install nkf
 $ make defconfig
 $ make package/toolchain/compile
-$ make packages/nkf/compile
+$ make package/nkf/compile
 ```
